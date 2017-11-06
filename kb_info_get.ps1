@@ -1,5 +1,5 @@
 Import-module msrcsecurityupdates
-Set-MSRCApiKey -ApiKey "7bd197d2e8a34cacad9ba1c1361019ec" -Verbose
+Set-MSRCApiKey -ApiKey "" -Verbose
 # $update_info_list_dir = "C:\Users\mkatayama\Desktop\kb_info\"
 # $update_info = Get-MsrcSecurityUpdate
 # $update_id_list = @()
