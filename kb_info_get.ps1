@@ -1,12 +1,17 @@
-function db_connect($ConnectionString,$sql){
+function db_run_query($ConnectionString,$sql){
     $conn = New-Object MySql.Data.MySqlClient.MySqlConnection($ConnectionString)
     $conn.Open()
     $command = New-Object MySql.Data.MySqlClient.MySqlCommand($sql, $conn)
-    $command.ExecuteReader()
+    $result = $command.ExecuteNonQuery()
+    if($result -eq '-1'){
+        Write-Output "Error"
+    }
     $conn.Close()
+    $conn.Dispose()
+    $command.Dispose()
 }
 
-Install-Module MSRCSecurityUpdates -Force
+#Install-Module MSRCSecurityUpdates -Force
 Import-module msrcsecurityupdates
 Set-MSRCApiKey -ApiKey "" -Verbose
 
@@ -21,11 +26,11 @@ $update_id_list = @()
 $update_id_list += $update_info.id
 
 $delete_cve_list_sql = 'DELETE FROM cve_list;'
-db_connect $ConnectionString $delete_cve_list_sql
+db_run_query $ConnectionString $delete_cve_list_sql
 $delete_kb_list_sql = 'DELETE FROM kb_list;'
-db_connect $ConnectionString $delete_kb_list_sql
+db_run_query $ConnectionString $delete_kb_list_sql
 $delete_production_list_sql = 'DELETE FROM production_list;'
-db_connect $ConnectionString $delete_production_list_sql
+db_run_query $ConnectionString $delete_production_list_sql
 
 foreach($update_id in $update_id_list){
     $kb_info_get = Get-MsrcCvrfDocument -ID $update_id -Verbose
@@ -37,7 +42,7 @@ foreach($update_id in $update_id_list){
         $cve_description = $cve_info.Notes | Where-Object Type -match "2"
         $note = $cve_description.Value | % { $_ -replace $tag_delete, "" }
         $insert_cve_list_sql = 'INSERT INTO cve_list VALUES ("'+ $update_id+'", "'+$cve+'", "'+$note+'");'
-        db_connect $ConnectionString $insert_cve_list_sql
+        db_run_query $ConnectionString $insert_cve_list_sql
         
         $kb_info = $cve_info.Remediations | Where-Object Type -match "2"
         $kb_list = @()
@@ -50,11 +55,10 @@ foreach($update_id in $update_id_list){
             $producrion_id_list = $producrion_id_list | Sort-Object | Get-Unique
             foreach($producrion_id in $producrion_id_list){
                 $insert_kb_list_sql = 'INSERT INTO kb_list VALUES ("'+ $update_id+'", "'+$cve+'", "'+$kb+'", "'+$producrion_id+'");'
-                db_connect $ConnectionString $insert_kb_list_sql
+                db_run_query $ConnectionString $insert_kb_list_sql
             }
         }
     }
-
     $production_info = $kb_info_get.ProductTree.FullProductName
     $production_id_list = @()
     $production_name_list = @()
@@ -62,8 +66,15 @@ foreach($update_id in $update_id_list){
     $production_name_list += $production_info.Value
     $i = 0
     foreach($production_id in $production_id_list){
-        $replace_production_list_sql = 'replace INTO production_list VALUES ("'+ $production_id + '", "' + $production_name_list[$i] + '");'
-        db_connect $ConnectionString $replace_production_list_sql
+        $count_production_list_sql = 'select count(*) from production_list where production_id ="'+ $production_id + '";'
+        $conn = New-Object MySql.Data.MySqlClient.MySqlConnection($ConnectionString)
+        $conn.Open()
+        $command = New-Object MySql.Data.MySqlClient.MySqlCommand($count_production_list_sql, $conn)
+        $count = $command.ExecuteScalar()
+        if ($count -eq '0') {
+            $insert_production_list_sql = 'INSERT INTO production_list VALUES ("'+ $production_id + '", "' + $production_name_list[$i] + '");'
+            db_run_query $ConnectionString $insert_production_list_sql
+        }
         $i = $i + 1
     }
 }
