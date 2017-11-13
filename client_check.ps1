@@ -1,6 +1,11 @@
-$filename = ".\server_list.txt"
+$filename = ".\check_list.txt"
 $lines = get-content $filename
-foreach($server in $lines){
+$username = Read-Host "input domain\username"
+$pass = Read-Host "input password"
+$password = $pass | ConvertTo-SecureString -asPlainText -Force
+$credential = New-Object System.Management.Automation.PSCredential($username,$password)
+
+foreach($server_info in $lines){
     # $excel = New-Object -ComObject Excel.Application
     # $excel.Visible = $true
     # $excel.DisplayAlerts = $true
@@ -9,8 +14,10 @@ foreach($server in $lines){
     # $kb_sheet_name = $server + "_KB"
     # $book.Sheets(1).Name = $kb_sheet_name
     # $sheet = $book.Sheets($kb_sheet_name)
+    $server_address = $server_info.Split(",")
+    $server = $server_address[1]
 
-    $wmi_OS_info = Get-WmiObject -ComputerName $server -Class Win32_OperatingSystem;
+    $wmi_OS_info = Get-WmiObject -ComputerName $server -Class Win32_OperatingSystem -Credential $credential;
     $os = $wmi_OS_info.caption;
     $bit = $wmi_OS_info.OSArchitecture;
     $os_name = ""
@@ -33,12 +40,12 @@ foreach($server in $lines){
     }
 
     $client_kb_list = @()
-    $client_kb_info = Get-WMIObject -ComputerName localhost Win32_QuickFixEngineering
+    $client_kb_info = Get-WMIObject -ComputerName $server Win32_QuickFixEngineering -Credential $credential
     $client_kb_list += $client_kb_info.HotFixID
     $client_kb_list = $client_kb_list | Sort-Object | Get-Unique
 
     $mysql_dll = "C:\Program Files (x86)\MySQL\Connector.NET 6.9\Assemblies\v4.5\MySql.Data.dll"
-    $ConnectionString = "Server=localhost;Port=3306;User Id=root;Password=ppppp0!!;Database=kb_checker;"
+    $ConnectionString = "Server=10.51.5.112;Port=3306;User Id=root;Password=ppppp0!!;Database=kb_checker;"
     [reflection.assembly]::LoadFrom($mysql_dll)
 
     $select_kb_list_sql = 'SELECT * FROM kb_list INNER JOIN production_list ON kb_list.producrion_id = production_list.production_id where production_name LIKE "%'+ $os_name +'%" AND production_name LIKE "%' + $bit_value + '%";'
@@ -109,7 +116,7 @@ foreach($server in $lines){
         # $sheet.Cells.Item($x, 3) = $excel_product_name
         # $x = $x + 1
     }
-    $sheet.Columns.AutoFit()
+    # $sheet.Columns.AutoFit()
 
     $cve_info_list = @()
     foreach($kb in $compare_kb){
@@ -141,6 +148,7 @@ foreach($server in $lines){
         $command = New-Object MySql.Data.MySqlClient.MySqlCommand($select_cve_info_sql, $conn)
         $result = $command.ExecuteReader()
         while($result.Read()){
+            Write-Output $result[2]
             # $sheet.Cells.Item($x, 2) = $result[2]
         }
         $conn.Close()
