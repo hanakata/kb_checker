@@ -1,3 +1,14 @@
+function db_count_query($ConnectionString,$sql){
+    $conn = New-Object MySql.Data.MySqlClient.MySqlConnection($ConnectionString)
+    $conn.Open()
+    $command = New-Object MySql.Data.MySqlClient.MySqlCommand($sql, $conn)
+    $count = $command.ExecuteScalar()
+    $conn.Close()
+    $conn.Dispose()
+    $command.Dispose()
+    return $count
+}
+
 $filename = ".\check_list.txt"
 $lines = get-content $filename
 $username = Read-Host "input domain\username"
@@ -6,18 +17,15 @@ $password = $pass | ConvertTo-SecureString -asPlainText -Force
 $credential = New-Object System.Management.Automation.PSCredential($username,$password)
 
 foreach($server_info in $lines){
-    # $excel = New-Object -ComObject Excel.Application
-    # $excel.Visible = $true
-    # $excel.DisplayAlerts = $true
-    # $book = $excel.Workbooks.Add()
-
-    # $kb_sheet_name = $server + "_KB"
-    # $book.Sheets(1).Name = $kb_sheet_name
-    # $sheet = $book.Sheets($kb_sheet_name)
     $server_address = $server_info.Split(",")
-    $server = $server_address[1]
+    $server_name = $server_address[0]
+    $server_ip = $server_address[1]
+    Write-Output "check:"$server_ip
 
-    $wmi_OS_info = Get-WmiObject -ComputerName $server -Class Win32_OperatingSystem -Credential $credential;
+    $kb_filename = ".\kb\" + $server_name + "_kb_info.csv"
+    $cve_filename = ".\cve\" + $server_name + "_cve_info.csv"
+
+    $wmi_OS_info = Get-WmiObject -ComputerName $server_ip -Class Win32_OperatingSystem -Credential $credential;
     $os = $wmi_OS_info.caption;
     $bit = $wmi_OS_info.OSArchitecture;
     $os_name = ""
@@ -40,7 +48,7 @@ foreach($server_info in $lines){
     }
 
     $client_kb_list = @()
-    $client_kb_info = Get-WMIObject -ComputerName $server Win32_QuickFixEngineering -Credential $credential
+    $client_kb_info = Get-WMIObject -ComputerName $server_ip Win32_QuickFixEngineering -Credential $credential
     $client_kb_list += $client_kb_info.HotFixID
     $client_kb_list = $client_kb_list | Sort-Object | Get-Unique
 
@@ -74,13 +82,7 @@ foreach($server_info in $lines){
         $i = $i + 1
     }
 
-    # $sheet.Cells.Item(1, 1) = "KB"
-    # $sheet.Cells.Item(1, 2) = "CVE"
-    # $sheet.Cells.Item(1, 3) = "product"
-    # $x = 2
-
     foreach($kb in $compare_kb){
-        # $sheet.Cells.Item($x, 1) = $kb
         $select_cve_info_sql = 'SELECT * FROM kb_list where kb_number = "' + $kb + '";'
         $conn = New-Object MySql.Data.MySqlClient.MySqlConnection($ConnectionString)
         $conn.Open()
@@ -92,11 +94,6 @@ foreach($server_info in $lines){
         }
         $conn.Close()
         $cve_list = $cve_list | Sort-Object | Get-Unique
-        # $excel_cve_number = ''
-        # foreach($cve_number in $cve_list){
-        #     $excel_cve_number += $cve_number + "`r`n"
-        # }
-        # $sheet.Cells.Item($x, 2) = $excel_cve_number
 
         $select_kb_info_sql = 'SELECT * FROM kb_list INNER JOIN production_list ON kb_list.producrion_id = production_list.production_id where kb_number = "' + $kb + '" AND production_name LIKE "%'+ $os_name +'%" AND production_name LIKE "%' + $bit_value + '%";'
         $conn = New-Object MySql.Data.MySqlClient.MySqlConnection($ConnectionString)
@@ -109,57 +106,51 @@ foreach($server_info in $lines){
         }
         $conn.Close()
         $product_list = $product_list | Sort-Object | Get-Unique
-        # $excel_product_name = ''
-        # foreach($product_name in $product_list){
-        #     $excel_product_name += $product_name + "`r`n"
-        # }
-        # $sheet.Cells.Item($x, 3) = $excel_product_name
-        # $x = $x + 1
     }
-    # $sheet.Columns.AutoFit()
+    
+    $n = 0
+    foreach($cve_info in $cve_list){
+        $select_cve_count_sql = 'SELECT COUNT(*) FROM jvns where cve_id = "' + $cve_info + '";'
+        db_count_query $ConnectionString $select_cve_count_sql
+        if( $_ -ne 0){
+            $select_cve_info_sql = 'SELECT * FROM jvns where cve_id = "' + $cve_info + '";'
+            $n = 1
+        }
+        if($n -eq 0 ){
+            $select_cve_count_sql = 'SELECT COUNT(*) FROM nvds where cve_id = "' + $cve_info + '";'
+            db_count_query $ConnectionString $select_cve_count_sql
+            if( $_ -ne 0){
+                $select_cve_info_sql = 'SELECT * FROM nvds where cve_id = "' + $cve_info + '";'
+                $n = 2
+            }
+        }
+        if($n -eq 0 ){
+            $select_cve_count_sql = 'SELECT COUNT(*) FROM cve_list where cve_number = "' + $cve_info + '";'
+            db_count_query $ConnectionString $select_cve_count_sql
+            if( $_ -ne 0){
+                $select_cve_info_sql = 'SELECT * FROM cve_list where cve_number = "' + $cve_info + '";'
+                $n = 3
+            }
+        }
 
-    $cve_info_list = @()
-    foreach($kb in $compare_kb){
-        $select_cve_info_sql = 'SELECT * FROM kb_list where kb_number = "' + $kb + '";'
         $conn = New-Object MySql.Data.MySqlClient.MySqlConnection($ConnectionString)
         $conn.Open()
         $command = New-Object MySql.Data.MySqlClient.MySqlCommand($select_cve_info_sql, $conn)
         $result = $command.ExecuteReader()
         while($result.Read()){
-            $cve_info_list += $result[1]
+            if($n -eq 1){
+                $cve = '"JVN","' + $result[5] + '","' + $result[7] + '","' + $result[10] + '","' + $result[11] + '","' + $result[13] + '"'
+                Write-Output $cve | Add-Content -Encoding utf8 $cve_filename
+            }
+            if($n -eq 2){
+                $cve = '"NVD","' + $result[5] + '","' + $result[6] + '","' + $result[7] + '","' + $result[9] + '","' + $result[15] + '"'
+                Write-Output $cve | Add-Content -Encoding utf8 $cve_filename
+            }
+            if($n -eq 3){
+                $cve = '"MS","' + $result[1] + '","' + $result[2] + '"'
+                Write-Output $cve | Add-Content -Encoding utf8 $cve_filename
+            }
         }
         $conn.Close()
     }
-    $cve_info_list = $cve_info_list | Sort-Object | Get-Unique
-    # $book.Worksheets.Add() 
-    # $cve_sheet_name = $server + "_cve"
-    # $book.Sheets(1).Name = $cve_sheet_name
-    # $sheet = $book.Sheets($cve_sheet_name)
-
-    # $sheet.Cells.Item(1, 1) = "CVE"
-    # $sheet.Cells.Item(1, 2) = "Note"
-    # $x = 2
-
-    foreach($cve_info in $cve_info_list){
-        # $sheet.Cells.Item($x, 1) = $cve_info
-        $select_cve_info_sql = 'SELECT * FROM cve_list where cve_number = "' + $cve_info + '";'
-        $conn = New-Object MySql.Data.MySqlClient.MySqlConnection($ConnectionString)
-        $conn.Open()
-        $command = New-Object MySql.Data.MySqlClient.MySqlCommand($select_cve_info_sql, $conn)
-        $result = $command.ExecuteReader()
-        while($result.Read()){
-            Write-Output $result[2]
-            # $sheet.Cells.Item($x, 2) = $result[2]
-        }
-        $conn.Close()
-        # $x = $x + 1
-    }
-
-    # $sheet.Columns.AutoFit()
-
-    # $book.SaveAs("${HOME}\Desktop\" + $server + ".xlsx")
-    # $excel.Quit()
-
-    # [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel)
-    # [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet)
 }
