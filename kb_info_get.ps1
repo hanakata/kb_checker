@@ -16,7 +16,7 @@ Import-module msrcsecurityupdates
 Set-MSRCApiKey -ApiKey "" -Verbose
 
 $mysql_dll = "C:\Program Files (x86)\MySQL\Connector.NET 6.9\Assemblies\v4.5\MySql.Data.dll"
-$ConnectionString = "Server=localhost;Port=3306;User Id=root;Password=ppppp0!!;Database=kb_checker;"
+$ConnectionString = "Server=localhost;Port=3306;User Id=root;Password=ppppp0!!;Database=kb_checker;;Max Pool Size=200;"
 
 [reflection.assembly]::LoadFrom($mysql_dll)
 
@@ -41,8 +41,15 @@ foreach($update_id in $update_id_list){
         $cve_info = $kb_info_get.Vulnerability | Where-Object CVE -match $cve
         $cve_description = $cve_info.Notes | Where-Object Type -match "2"
         $note = $cve_description.Value | % { $_ -replace $tag_delete, "" }
-        $insert_cve_list_sql = 'INSERT INTO cve_list VALUES ("'+ $update_id+'", "'+$cve+'", "'+$note+'");'
-        db_run_query $ConnectionString $insert_cve_list_sql
+        $count_production_list_sql = 'select count(*) from cve_list where cve_number ="'+ $cve + '";'
+        $conn = New-Object MySql.Data.MySqlClient.MySqlConnection($ConnectionString)
+        $conn.Open()
+        $command = New-Object MySql.Data.MySqlClient.MySqlCommand($count_production_list_sql, $conn)
+        $count = $command.ExecuteScalar()
+        if ($count -eq '0') {
+            $insert_cve_list_sql = 'INSERT INTO cve_list VALUES ("'+ $update_id+'", "'+$cve+'", "'+$note+'");'
+            db_run_query $ConnectionString $insert_cve_list_sql
+        }
         
         $kb_info = $cve_info.Remediations | Where-Object Type -match "2"
         $kb_list = @()

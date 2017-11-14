@@ -29,16 +29,54 @@ foreach($server_info in $lines){
     $os = $wmi_OS_info.caption;
     $bit = $wmi_OS_info.OSArchitecture;
     $os_name = ""
+    $os_onfirm_flg = 0
+    $os_not_r2_flg = 0
     $bit_value = ""
+    $bit_flg = 0
+
 
     if($os.Contains("Windows 7")){
         $os_name = "Windows 7"
+        $os_onfirm_flg = 1
     }
-    if($os.Contains("Windows 8")){
+    if($os.Contains("Windows 8" -And $os_onfirm_flg -eq 0)){
         $os_name = "Windows 8"
+        $os_onfirm_flg = 1
     }
-    if($os.Contains("Windows 10")){
+    if($os.Contains("Windows 10") -And $os_onfirm_flg -eq 0){
         $os_name = "Windows 10"
+        $os_onfirm_flg = 1
+    }
+    if($os.Contains("2008 R2") -And $os_onfirm_flg -eq 0){
+        $os_name = "Windows Server 2008 R2"
+        $os_onfirm_flg = 1
+    }
+    if($os.Contains("2012 R2") -And $os_onfirm_flg -eq 0){
+        $os_name = "Windows Server 2012 R2"
+        $bit_flg = 1
+        $os_onfirm_flg = 1
+    }
+    if($os.Contains("2016 R2") -And $os_onfirm_flg -eq 0){
+        $os_name = "Windows Server 2016 R2"
+        $bit_flg = 1
+        $os_onfirm_flg = 1
+    }
+    if($os.Contains("2008") -And $os_onfirm_flg -eq 0){
+        $os_name = "Windows Server 2008"
+        $os_onfirm_flg = 1
+        $os_not_r2_flg = 1
+    }
+    if($os.Contains("2012") -And $os_onfirm_flg -eq 0){
+        $os_name = "Windows Server 2012"
+        $bit_flg = 1
+        $os_onfirm_flg = 1
+        $os_not_r2_flg = 1
+    }
+    if($os.Contains("2016") -And $os_onfirm_flg -eq 0){
+        $os_name = "Windows Server 2016"
+        $bit_flg = 1
+        $os_onfirm_flg = 1
+        $os_not_r2_flg = 1
     }
     if($bit.Contains("32")){
         $bit_value = "32"
@@ -56,14 +94,25 @@ foreach($server_info in $lines){
     $ConnectionString = "Server=10.51.5.112;Port=3306;User Id=root;Password=ppppp0!!;Database=kb_checker;"
     [reflection.assembly]::LoadFrom($mysql_dll)
 
-    $select_kb_list_sql = 'SELECT * FROM kb_list INNER JOIN production_list ON kb_list.producrion_id = production_list.production_id where production_name LIKE "%'+ $os_name +'%" AND production_name LIKE "%' + $bit_value + '%";'
+    if($bit_flg -eq 1){
+        $select_kb_list_sql = 'SELECT * FROM kb_list INNER JOIN production_list ON kb_list.producrion_id = production_list.production_id where production_name LIKE "%'+ $os_name +'%";'
+    }else{
+        $select_kb_list_sql = 'SELECT * FROM kb_list INNER JOIN production_list ON kb_list.producrion_id = production_list.production_id where production_name LIKE "%'+ $os_name +'%" AND production_name LIKE "%' + $bit_value + '%";'
+    }
+    
     $conn = New-Object MySql.Data.MySqlClient.MySqlConnection($ConnectionString)
     $conn.Open()
     $command = New-Object MySql.Data.MySqlClient.MySqlCommand($select_kb_list_sql, $conn)
     $result = $command.ExecuteReader()
     $all_kb_list = @()
     while($result.Read()){
-        $all_kb_list += $result[2]
+        if($os_not_r2_flg -ne 1){
+            $all_kb_list += $result[2]
+        }else{
+            if(! $result[5].Contains("R2")){
+                $all_kb_list += $result[2]
+            }
+        }
     }
     $conn.Close()
     $all_kb_list = $all_kb_list | Sort-Object | Get-Unique
@@ -81,54 +130,67 @@ foreach($server_info in $lines){
         }
         $i = $i + 1
     }
-
-    foreach($kb in $compare_kb){
+    $cve_list = @()
+    foreach($kb in $compare_kb){     
         $select_cve_info_sql = 'SELECT * FROM kb_list where kb_number = "' + $kb + '";'
         $conn = New-Object MySql.Data.MySqlClient.MySqlConnection($ConnectionString)
         $conn.Open()
         $command = New-Object MySql.Data.MySqlClient.MySqlCommand($select_cve_info_sql, $conn)
         $result = $command.ExecuteReader()
-        $cve_list = @()
         while($result.Read()){
             $cve_list += $result[1]
         }
         $conn.Close()
-        $cve_list = $cve_list | Sort-Object | Get-Unique
+    }
 
-        $select_kb_info_sql = 'SELECT * FROM kb_list INNER JOIN production_list ON kb_list.producrion_id = production_list.production_id where kb_number = "' + $kb + '" AND production_name LIKE "%'+ $os_name +'%" AND production_name LIKE "%' + $bit_value + '%";'
+    $cve_list = $cve_list | Sort-Object | Get-Unique
+
+    foreach($kb in $compare_kb){
+        if($bit_flg -eq 1){
+            $select_kb_info_sql = 'SELECT * FROM kb_list INNER JOIN production_list ON kb_list.producrion_id = production_list.production_id where kb_number = "' + $kb + '" AND production_name LIKE "%'+ $os_name +'%";'
+        }else{
+            $select_kb_info_sql = 'SELECT * FROM kb_list INNER JOIN production_list ON kb_list.producrion_id = production_list.production_id where kb_number = "' + $kb + '" AND production_name LIKE "%'+ $os_name +'%" AND production_name LIKE "%' + $bit_value + '%";'
+        }
         $conn = New-Object MySql.Data.MySqlClient.MySqlConnection($ConnectionString)
         $conn.Open()
         $command = New-Object MySql.Data.MySqlClient.MySqlCommand($select_kb_info_sql, $conn)
         $result = $command.ExecuteReader()
-        $product_list = @()
         while($result.Read()){
-            $product_list += $result[5]
+            if($os_not_r2_flg -ne 1){
+                $kb_list = '"' + $result[1] + '","' + $result[2] + '","' + $result[5] + '"'
+                Write-Output $kb_list | Add-Content -Encoding utf8 $kb_filename
+            }else{
+                if(! $result[5].Contains("R2")){
+                    $kb_list = '"' + $result[1] + '","' + $result[2] + '","' + $result[5] + '"'
+                    Write-Output $kb_list | Add-Content -Encoding utf8 $kb_filename
+                }
+            }
         }
         $conn.Close()
-        $product_list = $product_list | Sort-Object | Get-Unique
     }
-    
-    $n = 0
+
     foreach($cve_info in $cve_list){
+        $n = 0
         $select_cve_count_sql = 'SELECT COUNT(*) FROM jvns where cve_id = "' + $cve_info + '";'
-        db_count_query $ConnectionString $select_cve_count_sql
-        if( $_ -ne 0){
+        $db_count = db_count_query $ConnectionString $select_cve_count_sql
+        if( $db_count -ne 0){
             $select_cve_info_sql = 'SELECT * FROM jvns where cve_id = "' + $cve_info + '";'
             $n = 1
         }
         if($n -eq 0 ){
             $select_cve_count_sql = 'SELECT COUNT(*) FROM nvds where cve_id = "' + $cve_info + '";'
-            db_count_query $ConnectionString $select_cve_count_sql
-            if( $_ -ne 0){
+            $db_count = db_count_query $ConnectionString $select_cve_count_sql
+            if( $db_count -ne 0){
                 $select_cve_info_sql = 'SELECT * FROM nvds where cve_id = "' + $cve_info + '";'
                 $n = 2
             }
         }
         if($n -eq 0 ){
             $select_cve_count_sql = 'SELECT COUNT(*) FROM cve_list where cve_number = "' + $cve_info + '";'
-            db_count_query $ConnectionString $select_cve_count_sql
-            if( $_ -ne 0){
+            $db_count = db_count_query $ConnectionString $select_cve_count_sql
+            if( $db_count -ne 0){
                 $select_cve_info_sql = 'SELECT * FROM cve_list where cve_number = "' + $cve_info + '";'
+                Write-Output $select_cve_info_sql
                 $n = 3
             }
         }
@@ -147,7 +209,7 @@ foreach($server_info in $lines){
                 Write-Output $cve | Add-Content -Encoding utf8 $cve_filename
             }
             if($n -eq 3){
-                $cve = '"MS","' + $result[1] + '","' + $result[2] + '"'
+                $cve = '"MS","' + $result[1] + $result[2] + '"'
                 Write-Output $cve | Add-Content -Encoding utf8 $cve_filename
             }
         }
