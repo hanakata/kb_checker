@@ -39,8 +39,7 @@ foreach($update_id in $update_id_list){
 
     foreach($cve in $cve_list){
         $cve_info = $kb_info_get.Vulnerability | Where-Object CVE -match $cve
-        $cve_description = $cve_info.Notes | Where-Object Type -match "2"
-        $note = $cve_description.Value | % { $_ -replace $tag_delete, "" }
+        $note = $cve_info.Title.Value
         $MaximumSeverity = Switch (
             ($cve_info.Threats | Where-Object {$_.Type -eq 3 }).Description.Value | Select-Object -Unique
         ) {
