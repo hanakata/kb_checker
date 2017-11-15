@@ -201,11 +201,11 @@ foreach($server_info in $lines){
         $result = $command.ExecuteReader()
         while($result.Read()){
             if($n -eq 1){
-                $cve = '"JVN","' + $result[4] + '","' + $result[7] + '","' + $result[10] + '","' + $result[11] + '","' + $result[13] + '"'
+                $cve = '"JVN","' + $result[5] + '","' + $result[6] + '","' + $result[10] + '","' + $result[11] + '","' + $result[13] + '"'
                 Write-Output $cve | Add-Content -Encoding utf8 $cve_filename
             }
             if($n -eq 2){
-                $cve = '"NVD","' + $result[4] + '","' + $result[6] + '","' + $result[7] + '","' + $result[9] + '","' + $result[15] + '"'
+                $cve = '"NVD","' + $result[5] + '","' + $result[6] + '","' + $result[7] + '","' + $result[9] + '","' + $result[15] + '"'
                 Write-Output $cve | Add-Content -Encoding utf8 $cve_filename
             }
             if($n -eq 3){
