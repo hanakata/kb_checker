@@ -209,7 +209,7 @@ foreach($server_info in $lines){
                 Write-Output $cve | Add-Content -Encoding utf8 $cve_filename
             }
             if($n -eq 3){
-                $cve = '"MS","' + $result[1] + $result[2] + '"'
+                $cve = '"MS","' + $result[1] + '","' + $result[2] + '","' + $result[3] + '"'
                 Write-Output $cve | Add-Content -Encoding utf8 $cve_filename
             }
         }
