@@ -13,7 +13,7 @@ function db_run_query($ConnectionString,$sql){
 
 #Install-Module MSRCSecurityUpdates -Force
 Import-module msrcsecurityupdates
-Set-MSRCApiKey -ApiKey "" -Verbose
+Set-MSRCApiKey -ApiKey "9a535dd6f3b34f97b67ba72917e3ca34" -Verbose
 
 $mysql_dll = "C:\Program Files (x86)\MySQL\Connector.NET 6.9\Assemblies\v4.5\MySql.Data.dll"
 $ConnectionString = "Server=localhost;Port=3306;User Id=root;Password=ppppp0!!;Database=kb_checker;;Max Pool Size=300;"
@@ -23,7 +23,9 @@ $ConnectionString = "Server=localhost;Port=3306;User Id=root;Password=ppppp0!!;D
 $tag_delete = "<('[^']*'|'[^']*'|[^''>])*>"
 $update_info = Get-MsrcSecurityUpdate
 $update_id_list = @()
+$update_date_list = @()
 $update_id_list += $update_info.id
+$update_date_list += $update_info.InitialReleaseDate
 
 $delete_cve_list_sql = 'DELETE FROM cve_list;'
 db_run_query $ConnectionString $delete_cve_list_sql
@@ -32,10 +34,14 @@ db_run_query $ConnectionString $delete_kb_list_sql
 $delete_production_list_sql = 'DELETE FROM production_list;'
 db_run_query $ConnectionString $delete_production_list_sql
 
+$j = 0
 foreach($update_id in $update_id_list){
     $kb_info_get = Get-MsrcCvrfDocument -ID $update_id -Verbose
     $cve_list = @()
     $cve_list += $kb_info_get.Vulnerability.CVE
+    $update_date_tmp = $update_date_list[$j]
+    $a = $update_date_tmp.Split("-")
+    $update_date = $a[0] + "-" + $a[1]
 
     foreach($cve in $cve_list){
         $cve_info = $kb_info_get.Vulnerability | Where-Object CVE -match $cve
@@ -56,6 +62,9 @@ foreach($update_id in $update_id_list){
         $conn.Open()
         $command = New-Object MySql.Data.MySqlClient.MySqlCommand($count_production_list_sql, $conn)
         $count = $command.ExecuteScalar()
+        $conn.Close()
+        $conn.Dispose()
+        $command.Dispose()
         if ($count -eq '0') {
             $insert_cve_list_sql = 'INSERT INTO cve_list VALUES ("'+ $update_id+'", "'+$cve+'", "'+$note+'", "'+$MaximumSeverity+'");'
             db_run_query $ConnectionString $insert_cve_list_sql
@@ -71,7 +80,8 @@ foreach($update_id in $update_id_list){
             $producrion_id_list = $kb_production_id.ProductID
             $producrion_id_list = $producrion_id_list | Sort-Object | Get-Unique
             foreach($producrion_id in $producrion_id_list){
-                $insert_kb_list_sql = 'INSERT INTO kb_list VALUES ("'+ $update_id+'", "'+$cve+'", "'+$kb+'", "'+$producrion_id+'");'
+                #$insert_kb_list_sql = 'INSERT INTO kb_list VALUES ("'+ $update_id+'", "'+$cve+'", "'+$kb+'", "'+$producrion_id+'");'
+                $insert_kb_list_sql = 'INSERT INTO kb_list VALUES ("'+ $update_date+'", "'+$cve+'", "'+$kb+'", "'+$producrion_id+'");'
                 db_run_query $ConnectionString $insert_kb_list_sql
             }
         }
@@ -94,4 +104,5 @@ foreach($update_id in $update_id_list){
         }
         $i = $i + 1
     }
+    $j = $j + 1
 }
