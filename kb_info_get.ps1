@@ -13,7 +13,7 @@ function db_run_query($ConnectionString, $sql) {
 
 #Install-Module MSRCSecurityUpdates -Force
 Import-module msrcsecurityupdates
-Set-MSRCApiKey -ApiKey <<API_KEY>> -Verbose
+Set-MSRCApiKey -ApiKey "9a535dd6f3b34f97b67ba72917e3ca34" -Verbose
 
 $mysql_dll = "C:\Program Files (x86)\MySQL\Connector.NET 6.9\Assemblies\v4.5\MySql.Data.dll"
 # $ConnectionString = "Server=localhost;Port=3306;User Id=root;Password=ppppp0!!;Database=kb_checker;Max Pool Size=300;"
@@ -21,7 +21,6 @@ $ConnectionString = "Server=localhost;Port=3306;User Id=root;Password=ppppp0!!;D
 
 [reflection.assembly]::LoadFrom($mysql_dll)
 
-$tag_delete = "<('[^']*'|'[^']*'|[^''>])*>"
 $update_info = Get-MsrcSecurityUpdate
 $update_id_list = @()
 $update_date_list = @()
@@ -99,7 +98,7 @@ foreach ($update_id in $update_id_list) {
         }
     }
     if ($n -eq 'on') {
-        db_run_query $ConnectionString $insert_cve_list_sql        
+        db_run_query $ConnectionString $insert_cve_list_sql
     }
     if ($m -eq 'on') {
         db_run_query $ConnectionString $insert_kb_list_sql
